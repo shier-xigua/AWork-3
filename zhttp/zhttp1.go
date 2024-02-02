@@ -1,16 +1,16 @@
 package zhttp
 
 import (
-	"AWork-3/zfunc"
-	"AWork-3/zvar"
+	"AWork-4/zfunc"
+	"AWork-4/zvar"
 	"bytes"
 	"io"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
+// 获取body
 func Zhttp1(method, url, payload string) (string, error) {
 	//第一阶段，定义请求
 	request, err := http.NewRequest(method, url, bytes.NewBufferString(payload))
@@ -27,19 +27,24 @@ func Zhttp1(method, url, payload string) (string, error) {
 	response, err := client.Do(request)
 	if err != nil {
 		log.Println("client", err)
-		time.Sleep(6 * time.Second)
+		*zfunc.ErrorCount++
+		//fmt.Println(*zfunc.ErrorCount)
 		return "", err
 	} else {
 		log.Println("Response1 Status:", response.Status)
+		*zfunc.ErrorCount = 0
+		//fmt.Println(*zfunc.ErrorCount)
 	}
 
 	//1.4读取工单系统工单摘要内容
 	body, _ := io.ReadAll(response.Body)
 	response.Body.Close()
+	client.CloseIdleConnections()
 	//1.5 返回值，工单系统摘要body,这个内容交给
 	return string(body), err
 }
 
+// 将body内容分解
 func InfoMap(body string) []map[string]string {
 	newbody := strings.Split(body, "{\"assignee\":")
 	var form []map[string]string

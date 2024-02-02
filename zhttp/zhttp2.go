@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 // 发起一个请求  抓取工单上工单告警内容
@@ -39,15 +38,16 @@ func Zhttp2(Form []map[string]string, Payload string) [][]interface{} {
 		respons, err := client.Do(req2)
 		if err != nil {
 			log.Println("Error sending request2:", err)
-			time.Sleep(6 * time.Second)
 			return nil
-		}
 
-		log.Println("Response2 Status:", respons.Status)
+		} else {
+			log.Println("Response2 Status:", respons.Status)
+		}
 
 		//2.1.5.1、获取工单页面的body！页面字数挺多的
 		body, err := io.ReadAll(respons.Body)
 		if err != nil {
+
 			log.Println("Error reading response2 body:", err)
 			return nil
 		}
@@ -57,13 +57,13 @@ func Zhttp2(Form []map[string]string, Payload string) [][]interface{} {
 		pattern := `"fault_desc":\s*\{([\s\S]+?)\s*"sourceValue"`
 		matches := zfunc.MatchString(pattern, string(body))
 		for _, matchAlarms = range matches {
-			log.Printf(" 工单: %v, 工单内容: %s\n", WorkOrderSummary["processKey"], matchAlarms[0]) //排错使用  抓取告警描述内容
+			log.Printf("工单: %v, 工单内容: %s\n", WorkOrderSummary["processKey"], matchAlarms[0]) //排错使用  抓取告警描述内容
 		}
 		respons.Body.Close()
 
 		//匹配business.txt内容和告警内容是否匹配，匹配则True，否则False
-		b, s := MatchToBusinessFunc(MatchToBusiness, matchAlarms[0])
-		log.Println("测试 b s m:", *b, s, WorkOrderSummary, "结束")
+		b, s := MatchToBusinessFunc(MatchToBusiness, matchAlarms[0]) //b=bool s=business
+		//log.Println("测试 b s m:", *b, s, WorkOrderSummary, "结束")
 
 		//如果返回值为True则写入orderTrue
 		if *b {
@@ -72,6 +72,10 @@ func Zhttp2(Form []map[string]string, Payload string) [][]interface{} {
 			orderTrue = append(orderTrue, tmp)
 		}
 
+	}
+	//如果orderTrue为0则未匹配到工单
+	if len(orderTrue) == 0 {
+		log.Println("未匹配到工单")
 	}
 	//最总返回一个*bool,string,[][]interface{}的总内容这个内容交给zhttp3处理
 	return orderTrue
@@ -87,7 +91,7 @@ func MatchToBusinessFunc(matchToBusiness *bool, matchAlarms string) (*bool, stri
 	var businessContains bool
 	var excludeContains bool
 	var by []byte
-	by, err := os.ReadFile("AWork-3/business.txt")
+	by, err := os.ReadFile("business.txt")
 	if err != nil {
 		log.Fatal("读取business.txt文件错误", err)
 	}
@@ -96,8 +100,8 @@ func MatchToBusinessFunc(matchToBusiness *bool, matchAlarms string) (*bool, stri
 		businessAndexclude = strings.Split(businessSplitExclude, "\\") //分割匹配字段和排除字段
 		business = strings.TrimSpace(businessAndexclude[0])            //匹配字段去空
 
-		//--判断是否切片长度为1
-		if len(businessAndexclude) == 1 {
+		//----------------判断是否切片长度为1--------------
+		if len(businessAndexclude) == 1 && business != "" {
 			businessContains = strings.Contains(matchAlarms, business)
 			if businessContains {
 				matchToBusiness = &trueFlag
@@ -107,17 +111,33 @@ func MatchToBusinessFunc(matchToBusiness *bool, matchAlarms string) (*bool, stri
 				matchToBusiness = &falseFlag
 			}
 
-			//--判断切片长度为2
-		} else if len(businessAndexclude) == 2 {
-			//匹配有两个值，如果有将第二个去除空行
-			exclude = strings.TrimSpace(businessAndexclude[1])
+			//--判断如果business.txt有空行不匹配
+		} else if len(businessAndexclude) == 1 && business == "" {
+			matchToBusiness = &falseFlag
+			//----------------判断是否切片长度为1--------------
+
+			//----------------判断是否切片长度为2--------------
+		} else if len(businessAndexclude) >= 2 {
 			//判断businessContains = 业务和告警是否匹配 匹配为=true
 			businessContains = strings.Contains(matchAlarms, business) //匹配
 
-			//判断excludeContains = 排除字段和告警是否匹配 匹配为true
-			excludeContains = strings.Contains(matchAlarms, exclude) //匹配
+			//循环取排除字段
+			for i := 1; i <= len(businessAndexclude)-1; i++ {
+				//fmt.Println(i) //调试排除字段循环取值
+				//fmt.Println(businessAndexclude[i])
 
-			// 2.1、判断第一个businessContains是否为true
+				//去除空行
+				exclude = strings.TrimSpace(businessAndexclude[i])
+
+				//判断excludeContains = 排除字段和告警是否匹配 匹配为true
+				excludeContains = strings.Contains(matchAlarms, exclude) //匹配
+				if excludeContains {
+					goto JumpLabel //如果排除字段中任意一个为true跳转
+				}
+
+			}
+
+		JumpLabel: //如果排除字段中任意一个为true跳转
 			if businessContains {
 				//判断第二个excludeContains是否为true 如果true放弃接单
 				if excludeContains {
@@ -133,9 +153,10 @@ func MatchToBusinessFunc(matchToBusiness *bool, matchAlarms string) (*bool, stri
 					return matchToBusiness, business
 				}
 			}
+			// 2.1、判断第一个businessContains是否为true
 		}
 
 	}
-	log.Println("未匹配到工单")
+
 	return matchToBusiness, "none"
 }

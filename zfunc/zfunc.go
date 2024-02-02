@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 func GetTokenAuthor() (token, authorization, line string) {
 
-	file, err := os.Open("AWork-3/cookie.txt")
+	file, err := os.Open("cookie.txt")
 	if err != nil {
 		log.Fatal("cookie.txt文件不存在", err)
 
@@ -61,11 +62,11 @@ func Voice(sound string) int {
 func LogFunc() *os.File {
 	var fileTimeFormat string = "2006-01-02"
 
-	err := os.Mkdir("AWork-3/log", os.ModePerm)
+	err := os.Mkdir("log", os.ModePerm)
 	if err != nil && !os.IsExist(err) {
 		log.Fatal("创建目录失败", err)
 	}
-	fileNmae := fmt.Sprintf("AWork-3/log/%v-AWork日志.txt", time.Now().Format(fileTimeFormat))
+	fileNmae := fmt.Sprintf("log/%v-AWork日志.txt", time.Now().Format(fileTimeFormat))
 	logFile, err := os.OpenFile(fileNmae, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		fmt.Println("文件写入失败", err)
@@ -74,4 +75,15 @@ func LogFunc() *os.File {
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(multiWriter)
 	return logFile
+}
+
+var ErrorCount = new(int)
+
+func PrintErrNet(count int) {
+	if *ErrorCount >= count {
+		text := "请求异常，请检查网络连接！"
+		// 使用 PowerShell 播放语音
+		cmd := exec.Command("PowerShell", "-Command", fmt.Sprintf("Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('%s')", text))
+		cmd.Run()
+	}
 }
